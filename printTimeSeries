@@ -1,0 +1,18 @@
+#!/bin/bash
+img_file=$1
+x=$2
+y=$3
+z=$4
+output_file=$5
+python << END
+import nibabel as nib
+import sys
+image_file = "$img_file"
+x = $x
+y = $y
+z = $z
+output_file = "$output_file"
+img= nib.load(image_file)
+img_data=img.get_data()
+output_print= img_data[int(x),int(y),int(z)]
+output_print.tofile(output_file, sep=" ", format="%d")

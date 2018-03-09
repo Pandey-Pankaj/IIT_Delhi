@@ -1,0 +1,59 @@
+#!/bin/bash
+img_file=$1
+TR=$2
+TGT_TIME=$3
+SLICE_TIME_ACQ_FILE=$4
+OUTPUT_FILE=$5
+python << END
+import nibabel as nib
+import sys
+import numpy as np
+from scipy.interpolate import InterpolatedUnivariateSpline as Interp
+import os.path
+
+image_file = "$img_file"
+tr = $TR
+tgt_time = $TGT_TIME
+slice_time_acqt_file = "$SLICE_TIME_ACQ_FILE"
+output_file = "$OUTPUT_FILE"
+
+with open(slice_time_acqt_file, 'r') as f:
+    slice_time = [line.strip() for line in f]
+
+if(all(float(i) <= tr for i in slice_time) and tgt_time <= tr):
+    img_load = nib.load(image_file)
+    data = img_load.get_data()
+    vol_nos = np.arange(data.shape[-1])
+    vol_onset_times_zero = vol_nos * tr
+    vol_onset_times_desired = vol_onset_times_zero + tgt_time
+
+    x=data.shape[0]
+    y=data.shape[1]
+    z=data.shape[2]
+    t=data.shape[3]
+    
+    slice_time_data = np.arange(x*y*z*t,dtype='f').reshape(x,y,z,t)
+    
+    for i in range(z):
+        for j in range(y):
+            for m in range(x):
+                time_course_slice = data[m, j, i, :]
+                times_slice = vol_onset_times_zero + float(slice_time[i])
+                lin_interper = Interp(times_slice, time_course_slice, k=1)
+                interped_vals = lin_interper(vol_onset_times_desired)
+                slice_time_data[m,j,i,:] = interped_vals
+                slice_time_data[m,j,i,0] = float(data[m,j,i,0])
+                slice_time_data[m,j,i,t-1] = float(data[m,j,i,t-1])
+    
+    slice_time_corrected_img= nib.Nifti1Image(slice_time_data, np.eye(4))
+    slice_time_corrected_img.to_filename(output_file+'.nii.gz')
+    
+    flag = "SUCCESS"
+    text_file = open(output_file+".txt", "w")
+    text_file.write(flag)
+    text_file.close()
+else:   
+ flag = "FAILURE"
+ text_file = open(output_file+".txt", "w")
+ text_file.write(flag)
+ text_file.close()
